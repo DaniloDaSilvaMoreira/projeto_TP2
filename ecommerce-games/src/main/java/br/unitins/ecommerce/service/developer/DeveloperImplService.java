@@ -1,0 +1,141 @@
+package br.unitins.ecommerce.service.developer;
+
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Set;
+
+import br.unitins.ecommerce.dto.developer.DeveloperDTO;
+import br.unitins.ecommerce.dto.developer.DeveloperResponseDTO;
+import br.unitins.ecommerce.model.produto.developer.Classificacao;
+import br.unitins.ecommerce.model.produto.developer.Developer;
+import br.unitins.ecommerce.repository.DeveloperRepository;
+import io.quarkus.panache.common.Sort;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Valid;
+import jakarta.validation.Validator;
+import jakarta.ws.rs.NotFoundException;
+
+@ApplicationScoped
+public class DeveloperImplService implements DeveloperService {
+
+    @Inject
+    Validator validator;
+
+    @Inject
+    DeveloperRepository developerRepository;
+
+    private DateTimeFormatter formatterGetAll = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    private DateTimeFormatter formatterGetById = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private Sort sort = Sort.by("id").ascending();
+
+    @Override
+    public List<DeveloperResponseDTO> getAll() {
+        
+        return developerRepository.findAll(sort).stream().map(developer -> new DeveloperResponseDTO(developer, formatterGetAll, developer.getClassificacao().getLabel())).toList();
+    }
+
+    @Override
+    public List<DeveloperResponseDTO> getAll(int page, int pageSize) {
+        
+        return developerRepository.findAll(sort).page(page, pageSize).stream().map(developer -> new DeveloperResponseDTO(developer, formatterGetAll, developer.getClassificacao().getLabel())).toList();
+    }
+
+    @Override
+    public DeveloperResponseDTO getById(Long id) {
+        
+        Developer developer = developerRepository.findById(id);
+
+        if (developer == null)
+            throw new NotFoundException("Não encontrado");
+
+        return new DeveloperResponseDTO(developer, formatterGetById, developer.getClassificacao().toString());
+    }
+
+    @Override
+    @Transactional
+    public DeveloperResponseDTO insert(@Valid DeveloperDTO developerDTO) {
+        
+        validar(developerDTO);
+
+        Developer developer = new Developer();
+
+        developer.setNome(developerDTO.nome());
+
+        developer.setAnoFundacao(developerDTO.anoFundacao());
+
+        developer.setClassificacao(Classificacao.valueOf(developerDTO.classificacao()));
+
+        developerRepository.persist(developer);
+
+        return new DeveloperResponseDTO(developer);
+    }
+
+    @Override
+    @Transactional
+    public DeveloperResponseDTO update(Long id, @Valid DeveloperDTO developerDTO) {
+        
+        validar(developerDTO);
+
+        Developer developer = developerRepository.findById(id);
+
+        if (developer == null)
+            throw new NotFoundException("Número fora das opções disponíveis");
+
+        developer.setNome(developerDTO.nome());
+
+        developer.setAnoFundacao(developerDTO.anoFundacao());
+
+        developer.setClassificacao(Classificacao.valueOf(developerDTO.classificacao()));
+
+        return new DeveloperResponseDTO(developer);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        
+        if (id == null)
+            throw new IllegalArgumentException("Número inválido");
+
+        Developer developer = developerRepository.findById(id);
+
+        if (developerRepository.isPersistent(developer))
+            developerRepository.delete(developer);
+
+        else
+            throw new NotFoundException("Nenhum developer encontrado");
+    }
+
+    @Override
+    public List<DeveloperResponseDTO> getByNome(String nome, int page, int pageSize) {
+        
+        return developerRepository.findByNome(nome, sort).page(page, pageSize).stream().map(developer -> new DeveloperResponseDTO(developer, formatterGetAll, developer.getClassificacao().getLabel())).toList();        
+    }
+
+    @Override
+    public Long count() {
+
+        return developerRepository.count();
+    }
+
+    @Override
+    public Long countByNome(String nome) {
+
+        return developerRepository.findByNome(nome, sort).count();
+    }
+    
+    private void validar(DeveloperDTO developerDTO) throws ConstraintViolationException {
+
+        Set<ConstraintViolation<DeveloperDTO>> violations = validator.validate(developerDTO);
+
+        if (!violations.isEmpty())
+            throw new ConstraintViolationException(violations);
+
+    }
+}
